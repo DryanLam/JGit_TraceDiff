@@ -79,12 +79,10 @@ def diffParser(List changes) {
             println(lstDiffs)
         }
     }
-    println(changeScopes)
+    return changeScopes
 }
 
-def loadFile() {
-    def filePath = "H:/Codebase/JGit/src/main/java/com/dl/jgit/CommitTrace.java"
-
+def loadFile(String filePath) {
     def lstLines = new File(filePath).readLines()
     def lineSize = lstLines.size()
 
@@ -135,17 +133,18 @@ def loadFile() {
         }
     }
     result
-    println()
-
-    //
+    return result
 //    def analyzeList = lstLines[i..j].findAll{!it.contains("//")}
-
-    println(lstLines)
 }
 
 
 //// Execute detection
-//def diffs = traceDiff("H:/Codebase/JGit")
-//diffParser(diffs)
+// Part 1: Detect changes
+def sourceGit = H:/Codebase/JGit
+def fileDiffs = traceDiff(sourceGit)            // Should detect how many files -> fileDiffs
+def filter = diffParser(fileDiffs)              // Detect multiple files && attach class
 
-loadFile()
+// Part 2: Detect methods
+def filePath = "H:/Codebase/JGit/src/main/java/com/dl/jgit/CommitTrace.java"
+def methodDetection = loadFile(filePath)
+println()
