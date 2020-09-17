@@ -86,41 +86,31 @@ def diffParser(List changes){
 def loadFile(){
     def filePath = "H:/Codebase/JGit/src/main/java/com/dl/jgit/CommitTrace.java"
 
-    File file = new File(filePath)
-    ClassLoader classLoader = getClass().getClassLoader()
-    Class loadedClass = classLoader.parseClass(file); // groovySource is a File object pointing to .groovy file
-    def lstMethod = loadedClass.getDeclaredMethods().findAll{it.toString().contains(".dl.")}
-    def value = lstMethod.first().getMetaPropertyValues()
-    println(lstMethod)  // It's hard to detach method with invoke method of java
+    def lstLines = new File(filePath).readLines()
+    def lstSize = lstLines.size()
+    def lstMethods = lstLines.findAll{it =~ /(public|private|protected|enum) / && !it.contains("class")}
 
-//    GroovyClassLoader loader = new GroovyClassLoader(parent);
-//    Class groovyClass = loader.parseClass(file); // groovySource is a File object pointing to .groovy file
-//    GroovyObject groovyObject = (GroovyObject) groovyClass.newInstance();
-//    Object[] args = {};
-//    groovyObject.invokeMethod("doit", args);
+    def lstIndexMethods = lstLines.findIndexValues{it =~ /(public|private|protected) / && !it.contains("class")}
 
+//    def lstMethods = lstLines.findAll{it =~ /(public|private|protected)/ }.findAll{!it.contains("class")}
+    // [22, 55, 64, lstSize]
+    // above.size()
+    // for i = 1, i <= above.size(); i++
+    def line = lstIndexMethods[i]
 
-//    File file = new File(filePath)
-//    ClassLoader classLoader = getClass().getClassLoader()
-//    Class loadedClass = classLoader.parseClass(file);
-//    Method m;
-//    ClassPool pool = ClassPool.getDefault();
-//    pool.insertClassPath(new ClassClassPath(loadedClass));
-//    CtClass cc = pool.get("CommitTrace")
-//    println("")
-//    CtClass cc  = classPool.get(filePath)
+    //
+    // for(line, line > lstIndexMethods[i - 1], line --)
+    def lineDetect = lstLines[line].trim()
+    def checkValid = lineDetect.contains("}")   &&
+                    !lineDetect.contains("//")  &&
+                    lineDetect.toString().startsWith("*")
 
+//    def analyzeList = lstLines[i..j].findAll{!it.contains("//")}
+
+    println(lstLines)
 }
 
 
-//Method m; // the method object
-//ClassPool pool = ClassPool.getDefault();
-//CtClass cc = pool.get(m.getDeclaringClass().getCanonicalName());
-//CtMethod javassistMethod = cc.getDeclaredMethod(m.getName());
-//int linenumber = javassistMethod.getMethodInfo().getLineNumber(0);
-
-// https://stackoverflow.com/questions/16745206/javassist-using-a-jar-file
-//pool.insertClassPath( "/Path/from/root/myjarfile.jar" );
 
 
 //// Execute detection
