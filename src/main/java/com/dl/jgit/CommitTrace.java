@@ -13,13 +13,13 @@ import java.io.FileOutputStream;
 
 public class CommitTrace {
 
-    final static String GIT_SOURCE = "H:/Codebase/Jersey_Spring/.git";
+    final static String GIT_SOURCE = System.getProperty("user.dir") + "/.git";
 
     public static void main(String[] args) throws Exception {
         Repository repository = new FileRepositoryBuilder()
                 .setGitDir(new File(GIT_SOURCE)).build();
-        // Here we get the head commit and it's first parent.
-        // Adjust to your needs to locate the proper commits.
+
+        // Check head with previous one commit
         RevCommit headCommit = getHeadCommit(repository);
         RevCommit diffWith = headCommit.getParent(0);
         FileOutputStream stdout = new FileOutputStream(FileDescriptor.out);
