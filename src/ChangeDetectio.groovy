@@ -6,11 +6,17 @@
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.diff.DiffEntry
 import org.eclipse.jgit.diff.DiffFormatter
+import org.eclipse.jgit.lib.ObjectLoader
 import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.revwalk.RevCommit
+import org.eclipse.jgit.revwalk.RevTree
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
+import org.eclipse.jgit.treewalk.TreeWalk
+import org.eclipse.jgit.treewalk.filter.PathFilter;
 
 // Alt + Enter at Grapes to add context libs for IntelliJ
+/* --------------- ------- Main Git interaction ------- --------------*/
+
 def traceDiff(String pathDir) {
     final String GIT_SOURCE = pathDir + "/.git";
     Repository repository = new FileRepositoryBuilder().setGitDir(new File(GIT_SOURCE)).build();
@@ -20,10 +26,19 @@ def traceDiff(String pathDir) {
         RevCommit headCommit = getHeadCommit(repository);
         RevCommit diffWith = headCommit.getParent(0);
 
+        // and using commit's tree find the path
+//        def headTree = headCommit.getTree();
+//        def prevTree = diffWith.getTree();
+//        System.out.println("Having tree: " + tree);
+
+
+        //----------
         def changes = [];
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         DiffFormatter diffFormatter = new DiffFormatter(stdout)
         diffFormatter.setRepository(repository);
+
+        // For commit
         List<DiffEntry> entries = diffFormatter.scan(diffWith, headCommit);
 
         for (DiffEntry entry : entries) {
@@ -31,6 +46,7 @@ def traceDiff(String pathDir) {
             if (filename =~ /.java$|.jsp$/) {
                 diffFormatter.format(entry);
                 changes += ["file": entry.getNewPath(), "diff": stdout.toString("UTF-8"), "type": entry.getChangeType().toString()]
+                stdout.reset()
             }
         }
         return changes
@@ -50,92 +66,84 @@ def RevCommit getHeadCommit(Repository repository) {
 }
 
 
+/* --------------- ------- Handle logic  operation ------- --------------*/
+
 def diffParser(List changes) {
     def diffPattern = /@@(.+?)@@/
 
     def changedScopes = []
-    def changedLines = []
     changes.each { change ->
+        // Only interact with file changed (not added new file)
         if ("MODIFY" == change.type) {
             def diff = change.diff
-            println(diff)
-            def detachDiff = (diff =~ diffPattern).findAll()*.last()        // [ -7,9 +7,14 ,  -22,13 +27,29 ]
+            def lstDiffs = diff.split('\n')
+
+            def detachDiff = (diff =~ diffPattern).findAll()*.last()        // >> [ -7,9 +7,14 ,  -22,13 +27,29 ]
 
             // Detach changed scopes
             detachDiff.each { number ->
-                def prevChanges = (number.trim().split(' ').first() - '-').split(',')
+//                def prevChanges = (number.trim().split(' ').first() - '-').split(',')
                 def curChanges = (number.trim().split(' ').last() - '+').split(',')
-                def indxStart = curChanges.first().toInteger()
-                def changedScope = curChanges.last().toInteger() - 1   // Git always count to unchanged part
-                changedScopes += ["scope": number, "from": indxStart, "change": changedScope]
+                def startIndex = curChanges.first().toInteger() - 1     // Deduct for the current @@ .. @@ line
+                def changedScope = curChanges.last().toInteger()
+
+                // Handle lines changed
+                def detect = lstDiffs.findIndexValues { it.toString().contains(number) }.first()
+                def detectArea = detect + changedScope
+                def changedLines = lstDiffs[detect..detectArea].findAll { !it.toString().trim().startsWith("-") }
+                        .findIndexValues { it.trim().startsWith("+") }*.plus(startIndex)
+                changedScopes += ["file": change.file, "scope": number, "lines": changedLines]
             }
-
-            // Hanlde lines changed
-            def test = changedScopes
-            def lstDiffs = diff.split('\n')
-            def tmp = "-7,9 +7,14"
-            def detect = lstDiffs.findIndexValues { it.contains(tmp)}.first()
-            def detectArea = detect + test.first().change
-            changedLines += lstDiffs[detect..detectArea].findIndexValues{it.trim().startsWith("+")}*.plus(detect)
-
-
-            // Wait to handle changed parts
-            // List of current line changed
-
-            println()
         }
     }
     return changedScopes
 }
 
 
-def loadFile(String filePath) {
+def methodDetection(String filePath) {
     def lstLines = new File(filePath).readLines()
     def lineSize = lstLines.size()
 
-    def lstIndexMethods = lstLines.findIndexValues { it =~ /(public|private|protected|enum) / &&
-                                                     !it.contains("class") &&
-                                                     !it.contains("=")}
+    def lstIndexMethods = lstLines.findIndexValues {
+        it =~ /(public|private|protected|enum) / &&
+                !it.contains("class") &&
+                !it.contains("=")
+    }
 
-    def methods = lstIndexMethods.collect{lstLines[it].split("\\(").first().split(" ").last()}
+    def methods = lstIndexMethods.collect { lstLines[it].split("\\(").first().split(" ").last() }
 
     def count = 0
-    for( lineSize; lineSize >= lstIndexMethods.last(); lineSize--){
+    for (lineSize; lineSize >= lstIndexMethods.last(); lineSize--) {
         def lineDetect = lstLines[lineSize - 1].trim()
         def isValid = lineDetect.contains("}") &&
-                !lineDetect.contains("//") &&
-                !lineDetect.contains("/*") &&
+                !lineDetect.startsWith("/") &&
                 !lineDetect.startsWith("*")
-        if(isValid){
+        if (isValid) {
             count++
-            if(2 == count){
+            if (2 == count) {
                 lstIndexMethods += lineSize - 1
             }
         }
     }
 
-    def exp = lstIndexMethods.size() - 2
-
     // [22, 55, 64, lstSize]
     def result = []
-    for (int i = 0; i <= exp; i++) {
+    for (int i = 0; i <= lstIndexMethods.size() - 2; i++) {
         def line = lstIndexMethods[i + 1]
 
         for (line; line > lstIndexMethods[i]; line--) {
             def lineDetect = lstLines[line].trim()
             def isValid = lineDetect.contains("}") &&
-                    !lineDetect.startsWith("//") &&
-                    !lineDetect.startsWith("/*") &&
+                    !lineDetect.startsWith("/") &&
                     !lineDetect.startsWith("*")
 
             if (isValid) {
-                result += ["method": methods[i], "start": lstIndexMethods[i], "end": line]; break
+                result += ["method": methods[i], "start": lstIndexMethods[i] + 1, "end": line + 1]; break
+                // Plus 1 for counting nature from 1
             }
         }
     }
-    result
     return result
-//    def analyzeList = lstLines[i..j].findAll{!it.contains("//")}
 }
 
 
@@ -146,6 +154,6 @@ def fileDiffs = traceDiff(sourceGit)            // Should detect how many files 
 def filter = diffParser(fileDiffs)              // Detect multiple files && attach class
 
 // Part 2: Detect methods
-//def filePath = sourceGit + "/src/main/java/com/dl/jgit/CommitTrace.java"
-//def methodDetection = loadFile(filePath)
+def filePath = sourceGit + "/src/main/java/com/dl/jgit/CommitTrace.java"
+def methods = methodDetection(filePath)
 println()
