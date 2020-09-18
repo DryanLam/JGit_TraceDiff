@@ -1,7 +1,3 @@
-import javassist.ClassClassPath
-import javassist.ClassPool
-import javassist.CtClass
-import javassist.LoaderClassPath
 @Grapes([
         @Grab(group = 'org.eclipse.jgit', module = 'org.eclipse.jgit', version = '5.8.1.202007141445-r'),
         @Grab(group = 'org.javassist', module = 'javassist', version = '3.27.0-GA')
@@ -13,9 +9,6 @@ import org.eclipse.jgit.diff.DiffFormatter
 import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.revwalk.RevCommit
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
-
-import java.lang.reflect.Method
-
 
 // Alt + Enter at Grapes to add context libs for IntelliJ
 def traceDiff(String pathDir) {
@@ -38,7 +31,6 @@ def traceDiff(String pathDir) {
             if (filename =~ /.java$|.jsp$/) {
                 diffFormatter.format(entry);
                 changes += ["file": entry.getNewPath(), "diff": stdout.toString("UTF-8"), "type": entry.getChangeType().toString()]
-//                changes += ["file": entry.getNewPath(), "diff": stdout.toString("UTF-8"), "type": entry.getChangeType().toString()]
             }
         }
         return changes
@@ -46,6 +38,7 @@ def traceDiff(String pathDir) {
         println("Source-code should have more than one commit. Looks like there is only ONE commit or else. Please check it")
     }
 }
+
 
 def RevCommit getHeadCommit(Repository repository) {
     try {
@@ -60,7 +53,8 @@ def RevCommit getHeadCommit(Repository repository) {
 def diffParser(List changes) {
     def diffPattern = /@@(.+?)@@/
 
-    def changeScopes = []
+    def changedScopes = []
+    def changedLines = []
     changes.each { change ->
         if ("MODIFY" == change.type) {
             def diff = change.diff
@@ -69,18 +63,31 @@ def diffParser(List changes) {
 
             // Detach changed scopes
             detachDiff.each { number ->
-                def splitChanges = number.split(',')
-                def indxStart = (splitChanges.first() - "-").toInteger()
-                def changeScope = splitChanges.last().toInteger() - 1   // Git always count to unchanged part
-                changeScopes += ["startLine": indxStart, "endLine": indxStart + changeScope]
+                def prevChanges = (number.trim().split(' ').first() - '-').split(',')
+                def curChanges = (number.trim().split(' ').last() - '+').split(',')
+                def indxStart = curChanges.first().toInteger()
+                def changedScope = curChanges.last().toInteger() - 1   // Git always count to unchanged part
+                changedScopes += ["scope": number, "from": indxStart, "change": changedScope]
             }
-            def lstDiffs = diff.split('\n')
 
-            println(lstDiffs)
+            // Hanlde lines changed
+            def test = changedScopes
+            def lstDiffs = diff.split('\n')
+            def tmp = "-7,9 +7,14"
+            def detect = lstDiffs.findIndexValues { it.contains(tmp)}.first()
+            def detectArea = detect + test.first().change
+            changedLines += lstDiffs[detect..detectArea].findIndexValues{it.trim().startsWith("+")}*.plus(detect)
+
+
+            // Wait to handle changed parts
+            // List of current line changed
+
+            println()
         }
     }
-    return changeScopes
+    return changedScopes
 }
+
 
 def loadFile(String filePath) {
     def lstLines = new File(filePath).readLines()
@@ -122,12 +129,6 @@ def loadFile(String filePath) {
                     !lineDetect.startsWith("*")
 
             if (isValid) {
-//                if(i == exp){
-//                    count++
-//                    if(2 == count){
-//                        lstIndexMethods += lineSize - 1
-//                    }
-//                }
                 result += ["method": methods[i], "start": lstIndexMethods[i], "end": line]; break
             }
         }
@@ -140,11 +141,11 @@ def loadFile(String filePath) {
 
 //// Execute detection
 // Part 1: Detect changes
-def sourceGit = H:/Codebase/JGit
+def sourceGit = "H:/Codebase/JGit"
 def fileDiffs = traceDiff(sourceGit)            // Should detect how many files -> fileDiffs
 def filter = diffParser(fileDiffs)              // Detect multiple files && attach class
 
 // Part 2: Detect methods
-def filePath = "H:/Codebase/JGit/src/main/java/com/dl/jgit/CommitTrace.java"
-def methodDetection = loadFile(filePath)
+//def filePath = sourceGit + "/src/main/java/com/dl/jgit/CommitTrace.java"
+//def methodDetection = loadFile(filePath)
 println()
