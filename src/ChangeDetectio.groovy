@@ -147,6 +147,21 @@ def methodDetection(String filePath) {
 }
 
 
+def fileInfo(def filter, def sourcePath = ""){
+    def methodInfos = []
+    filter.each{ item ->
+        def filePath = sourcePath + item.file
+        methods += ["file": item.file, "method": methodDetection(filePath)]
+    }
+    return methodInfos
+}
+
+
+def impactAnalysis(){
+
+}
+
+
 //// Execute detection
 // Part 1: Detect changes
 def sourceGit = "H:/Codebase/JGit/"
@@ -154,12 +169,6 @@ def fileDiffs = traceDiff(sourceGit)            // Should detect how many files 
 def filter = diffParser(fileDiffs)              // Detect multiple files && attach class
 
 // Part 2: Detect methods
-//def filePath = sourceGit + "/src/main/java/com/dl/jgit/CommitTrace.java"
-
-def methods = []
-filter.each{ item ->
-    def filePath = sourceGit + item.file
-    methods += ["file": item.file, "method": methodDetection(filePath)]
-}
+def methods = fileInfo(filter,sourceGit)
 
 println()
