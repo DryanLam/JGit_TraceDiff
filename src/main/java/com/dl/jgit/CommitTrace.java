@@ -24,10 +24,9 @@ public class CommitTrace {
         Repository repository = new FileRepositoryBuilder()
                 .setGitDir(new File(GIT_SOURCE)).build();
 
-        // Check head with previous one commit
         RevCommit headCommit = getHeadCommit(repository);
         RevCommit diffWith = headCommit.getParent(0);
-//        FileOutputStream stdout = new FileOutputStream(FileDescriptor.out);
+//        Check is it ok
 
         Map<String, String> diffTrace = new LinkedHashMap<>();
         List changes = new LinkedList();

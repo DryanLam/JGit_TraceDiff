@@ -27,7 +27,6 @@ public class Test {
         // Check head with previous one commit
         RevCommit headCommit = getHeadCommit(repository);
         RevCommit diffWith = headCommit.getParent(0);
-//        FileOutputStream stdout = new FileOutputStream(FileDescriptor.out);
 
         Map<String, String> diffTrace = new LinkedHashMap<>();
         List changes = new LinkedList();
