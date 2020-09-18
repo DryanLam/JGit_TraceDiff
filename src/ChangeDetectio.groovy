@@ -138,7 +138,7 @@ def methodDetection(String filePath) {
                     !lineDetect.startsWith("*")
 
             if (isValid) {
-                result += ["method": methods[i], "start": lstIndexMethods[i] + 1, "end": line + 1]; break
+                result += ["name": methods[i], "start": lstIndexMethods[i] + 1, "end": line + 1]; break
                 // Plus 1 for counting nature from 1
             }
         }
@@ -149,11 +149,17 @@ def methodDetection(String filePath) {
 
 //// Execute detection
 // Part 1: Detect changes
-def sourceGit = "H:/Codebase/JGit"
+def sourceGit = "H:/Codebase/JGit/"
 def fileDiffs = traceDiff(sourceGit)            // Should detect how many files -> fileDiffs
 def filter = diffParser(fileDiffs)              // Detect multiple files && attach class
 
 // Part 2: Detect methods
-def filePath = sourceGit + "/src/main/java/com/dl/jgit/CommitTrace.java"
-def methods = methodDetection(filePath)
+//def filePath = sourceGit + "/src/main/java/com/dl/jgit/CommitTrace.java"
+
+def methods = []
+filter.each{ item ->
+    def filePath = sourceGit + item.file
+    methods += ["file": item.file, "method": methodDetection(filePath)]
+}
+
 println()
