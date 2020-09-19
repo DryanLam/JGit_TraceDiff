@@ -1,7 +1,10 @@
 @Grapes([
         @Grab(group = 'org.eclipse.jgit', module = 'org.eclipse.jgit', version = '5.8.1.202007141445-r'),
-        @Grab(group = 'org.javassist', module = 'javassist', version = '3.27.0-GA')
+        @Grab(group='org.slf4j', module='slf4j-nop', version='1.7.25', scope='test')
 ])
+
+//@GrabConfig(systemClassLoader=true)
+//@Grab(group='mysql', module='mysql-connector-java', version='5.1.6')
 
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.diff.DiffEntry
@@ -142,9 +145,6 @@ def methodDetection(String filePath) {
 
             if (isValid) {
                 result += ["name": methods[i], "start": lstIndexMethods[i] + 1, "end": line + 1]; break
-//                def start = lstIndexMethods[i] + 1
-//                def end = line + 1
-//                result += ["name": methods[i], "line": start..end]; break
             }
         }
     }
@@ -153,18 +153,17 @@ def methodDetection(String filePath) {
 
 
 //def fileInfo(def filter, def sourcePath = "") {
-def fileInfo(def files, def sourcePath = "") {
+def fileInfo(def files, def sourceDir = "") {
     def methodInfos = []
     files.each { file ->
-        def filePath = sourcePath + file
+        def filePath = sourceDir + file
         methodInfos += ["file": file, "method": methodDetection(filePath)]
     }
-    return methodInfos
+    return methodInfos.unique()
 }
 
 
-def impactAnalysis(def filter, def sourcePath = "") {
-    def infoDetected = fileInfo(filter.file, sourcePath)
+def impactAnalysis(def filter, def sourceDir = "") {
     // methods: [[
     //              file:file, method:[
     //                                  ["name": method, "start": number, "end": number],
@@ -173,35 +172,33 @@ def impactAnalysis(def filter, def sourcePath = "") {
     //          ]]
     //
     // filter: [
-    //              [file": file, change: ["scope": number, "lines": changedLines],
-    //                                    ["scope": number, "lines": changedLines]],
+    //              [file": file, change: ["scope": number, "lines": [changedLines]],
+    //                                    ["scope": number, "lines": [changedLines]]],
     //              [file": file, change: ["scope": number, "lines": changedLines]]
     //          ]
 
-    // changed line file >> method
+    // Get method info from diff
+    def infoDetected = fileInfo(filter.file, sourceDir)
 
-    def tmp = []
+    // Detect changed line in file >> method
+    def results = []
     filter.each { item ->
+        def file = new File(item.file)
+        def fileName = file.parentFile.toURI().relativize(file.toURI()).getPath()
+        def className = fileName - ".java"
+
         def infoMethods = infoDetected.find { it.file == item.file }?.method
-        def lines = item.change.lines
+
+        def lines = item.change.lines.flatten()
         lines.each { num ->
-            def target = num
             infoMethods.each { m ->
-                def name = m.name
-                def range = m.start..m.end
-                def checked = target in range
-                if (checked) {
-                    tmp += name
+                if (num in m.start..m.end) {
+                    results += "${className}.${m.name}"
                 }
             }
         }
-        tmp
-        tmp
     }
-
-    def result = []
-//    def classFilter = methodDetecions.findAll{it.contains("")}
-    return ["class": file, "method": "name"]
+    return results
 }
 
 
@@ -219,7 +216,8 @@ def fileDiffs = traceDiff(sourceGit)            // Should detect how many files 
 def filter = diffParser(fileDiffs)              // Detect multiple files && attach class
 
 // Part 2: Detect method
-//def methods = fileInfo(filter.file, sourceGit)
 def methodImpacted = impactAnalysis(filter, sourceGit)
 
-println(methods.toString())
+println(methodImpacted)
+
+// CLI:  groovy impactDetection.groovy
