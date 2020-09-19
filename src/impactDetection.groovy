@@ -60,35 +60,46 @@ def RevCommit getHeadCommit(Repository repository) {
 
 /* --------------- ------- Handle logic  operation ------- --------------*/
 
-def diffParser(List changes) {
+def diffParser(List diffFiles) {
     def diffPattern = /@@(.+?)@@/
 
-    def changedScopes = []
-    changes.each { change ->
+    def results = []
+    diffFiles.each { change ->
         // Only interact with file changed (not added new file)
         if ("MODIFY" == change.type) {
             def diff = change.diff
             def lstDiffs = diff.split('\n')
 
+            def changedScopes = []
             def detachDiff = (diff =~ diffPattern).findAll()*.last()        // >> [ -7,9 +7,14 ,  -22,13 +27,29 ]
 
             // Detach changed scopes
             detachDiff.each { number ->
-//                def prevChanges = (number.trim().split(' ').first() - '-').split(',')
-                def curChanges = (number.trim().split(' ').last() - '+').split(',')
+                def prevChanges = (number.trim().split(' ').first() - '-').split(',')           // 7,9
+                def curChanges = (number.trim().split(' ').last() - '+').split(',')             // 7,14
                 def startIndex = curChanges.first().toInteger() - 1     // Deduct for the current @@ .. @@ line
                 def changedScope = curChanges.last().toInteger()
 
                 // Handle lines changed
                 def detect = lstDiffs.findIndexValues { it.toString().contains(number) }.first()
                 def detectArea = detect + changedScope
-                def changedLines = lstDiffs[detect..detectArea].findAll { !it.toString().trim().startsWith("-") }
-                        .findIndexValues { it.trim().startsWith("+") }*.plus(startIndex)
-                changedScopes += ["file": change.file, "scope": number, "lines": changedLines]
+
+                def changedLines = []
+                if (prevChanges.first() == curChanges.first()
+                        && prevChanges.last() > curChanges.last()) {
+                    changedLines = lstDiffs[detect..detectArea].findIndexValues { it.trim().startsWith("-") && (it.trim() - "-") != "" }*.plus(startIndex - 1)
+                } else {
+                    changedLines = lstDiffs[detect..detectArea].findAll { !it.toString().trim().startsWith("-") }
+                            .findIndexValues { it.trim().startsWith("+") }*.plus(startIndex)
+                }
+                changedScopes += ["scope": number, "lines": changedLines]
+
             }
+
+            results += ["file": change.file, "change": changedScopes]
         }
     }
-    return changedScopes
+    return results
 }
 
 
@@ -131,6 +142,9 @@ def methodDetection(String filePath) {
 
             if (isValid) {
                 result += ["name": methods[i], "start": lstIndexMethods[i] + 1, "end": line + 1]; break
+//                def start = lstIndexMethods[i] + 1
+//                def end = line + 1
+//                result += ["name": methods[i], "line": start..end]; break
             }
         }
     }
@@ -138,18 +152,63 @@ def methodDetection(String filePath) {
 }
 
 
-def fileInfo(def filter, def sourcePath = ""){
+//def fileInfo(def filter, def sourcePath = "") {
+def fileInfo(def files, def sourcePath = "") {
     def methodInfos = []
-    filter.each{ item ->
-        def filePath = sourcePath + item.file
-        methods += ["file": item.file, "method": methodDetection(filePath)]
+    files.each { file ->
+        def filePath = sourcePath + file
+        methodInfos += ["file": file, "method": methodDetection(filePath)]
     }
     return methodInfos
 }
 
 
-def impactAnalysis(){
+def impactAnalysis(def filter, def sourcePath = "") {
+    def infoDetected = fileInfo(filter.file, sourcePath)
+    // methods: [[
+    //              file:file, method:[
+    //                                  ["name": method, "start": number, "end": number],
+    //                                  ["name": method, "start": number, "end": number]
+    //                                ]
+    //          ]]
+    //
+    // filter: [
+    //              [file": file, change: ["scope": number, "lines": changedLines],
+    //                                    ["scope": number, "lines": changedLines]],
+    //              [file": file, change: ["scope": number, "lines": changedLines]]
+    //          ]
 
+    // changed line file >> method
+
+    def tmp = []
+    filter.each { item ->
+        def infoMethods = infoDetected.find { it.file == item.file }?.method
+        def lines = item.change.lines
+        lines.each { num ->
+            def target = num
+            infoMethods.each { m ->
+                def name = m.name
+                def range = m.start..m.end
+                def checked = target in range
+                if (checked) {
+                    tmp += name
+                }
+            }
+        }
+        tmp
+        tmp
+    }
+
+    def result = []
+//    def classFilter = methodDetecions.findAll{it.contains("")}
+    return ["class": file, "method": "name"]
+}
+
+
+def testCaseImpacted(def resultAnalysis) {
+    // Query database
+    // method-info, testcase             >> method group class & method: Test.test
+    // Select testcase from db.table where method-info="${class}.${method}"
 }
 
 
@@ -159,8 +218,8 @@ def sourceGit = "H:/Codebase/JGit/"
 def fileDiffs = traceDiff(sourceGit)            // Should detect how many files -> fileDiffs
 def filter = diffParser(fileDiffs)              // Detect multiple files && attach class
 
-// Part 2: Detect methods
-def methods = fileInfo(filter,sourceGit)
+// Part 2: Detect method
+//def methods = fileInfo(filter.file, sourceGit)
+def methodImpacted = impactAnalysis(filter, sourceGit)
 
-
-println()
+println(methods.toString())
