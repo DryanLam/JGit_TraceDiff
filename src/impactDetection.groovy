@@ -23,24 +23,16 @@ def traceDiff(String pathDir) {
 
     try {
         // Check head with previous one commit
-        RevCommit headCommit = getHeadCommit(repository);
-        RevCommit diffWith = headCommit.getParent(0);
+        RevCommit headCommit = getHeadCommit(repository)
+        RevCommit diffWith = headCommit.getParent(0)
 
-        // and using commit's tree find the path
-//        def headTree = headCommit.getTree();
-//        def prevTree = diffWith.getTree();
-//        System.out.println("Having tree: " + tree);
-
-
-        //----------
-        def changes = [];
-        ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+        def changes = []
+        ByteArrayOutputStream stdout = new ByteArrayOutputStream()
         DiffFormatter diffFormatter = new DiffFormatter(stdout)
         diffFormatter.setRepository(repository);
 
         // For commit
-        List<DiffEntry> entries = diffFormatter.scan(diffWith, headCommit);
-
+        List<DiffEntry> entries = diffFormatter.scan(diffWith, headCommit)
         for (DiffEntry entry : entries) {
             String filename = entry.getNewPath();
             if (filename =~ /.java$|.jsp$/) {
@@ -139,7 +131,6 @@ def methodDetection(String filePath) {
 
             if (isValid) {
                 result += ["name": methods[i], "start": lstIndexMethods[i] + 1, "end": line + 1]; break
-                // Plus 1 for counting nature from 1
             }
         }
     }
@@ -170,5 +161,6 @@ def filter = diffParser(fileDiffs)              // Detect multiple files && atta
 
 // Part 2: Detect methods
 def methods = fileInfo(filter,sourceGit)
+
 
 println()
