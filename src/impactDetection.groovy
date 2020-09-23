@@ -1,6 +1,7 @@
 @Grapes([
         @Grab(group = 'org.eclipse.jgit', module = 'org.eclipse.jgit', version = '5.8.1.202007141445-r'),
-        @Grab(group='org.slf4j', module='slf4j-nop', version='1.7.25', scope='test')
+        @Grab(group = 'org.slf4j', module = 'slf4j-nop', version = '1.7.25', scope = 'test'),
+        @Grab(group = 'org.mongodb', module = 'mongo-java-driver', version = '3.12.7')
 ])
 
 //@GrabConfig(systemClassLoader=true)
@@ -16,6 +17,7 @@ import org.eclipse.jgit.revwalk.RevTree
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 import org.eclipse.jgit.treewalk.TreeWalk
 import org.eclipse.jgit.treewalk.filter.PathFilter;
+import com.mongodb.*;
 
 // Alt + Enter at Grapes to add context libs for IntelliJ
 /* --------------- ------- Main Git interaction ------- --------------*/
@@ -203,21 +205,39 @@ def impactAnalysis(def filter, def sourceDir = "") {
 
 
 def testCaseImpacted(def resultAnalysis) {
-    // Query database
-    // method-info, testcase             >> method group class & method: Test.test
-    // Select testcase from db.table where method-info="${class}.${method}"
+    def CONNECTION = "192.168.56.120"
+    def PORT = 27017
+    def dbClient = new MongoClient(CONNECTION, PORT)
+    DB db = dbClient.getDB("FlashHatch")
+    DBCollection col = db.getCollection("TestCases");
+
+    def results = []
+    BasicDBObject query = new BasicDBObject()
+    resultAnalysis.each { m ->
+        query.put("coverName", new BasicDBObject("\$in", [m.toString()]))
+        results += col.find(query).toArray().collect { it.tc }
+    }
+    def tcIDs = results.flatten().unique().findAll{it.toString().contains("ID")}
+    return tcIDs.join(",");
 }
 
 
 //// Execute detection
 // Part 1: Detect changes
-def sourceGit = "H:/Codebase/JGit/"
+//def sourceGit = "H:/Codebase/Jersey_Spring/"
+def sourceGit = "./"
 def fileDiffs = traceDiff(sourceGit)            // Should detect how many files -> fileDiffs
 def filter = diffParser(fileDiffs)              // Detect multiple files && attach class
 
 // Part 2: Detect method
-def methodImpacted = impactAnalysis(filter, sourceGit)
+def methodImpacted = impactAnalysis(filter, sourceGit).unique()
 
-println(methodImpacted)
+// Part 3: Query databse
+def tcIDs = testCaseImpacted(methodImpacted)
 
-// CLI:  groovy impactDetection.groovy
+
+// Output to Jenkins catch-up
+println(tcIDs)
+
+
+// USE by CLI:  groovy impactDetection.groovy
